@@ -1,0 +1,29 @@
+[project]
+name = "oc-fruits-aws-emr"
+version = "0.1.0"
+description = "TP Traitement Big Data sur AWS EMR"
+authors = [{ name = "Kiril Isakov", email = "kirix.isakov@gmail.com" }]
+requires-python = ">=3.12,<3.13"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "ipykernel (>=7.2.0,<8.0.0)",
+    "ipython (>=9.11.0,<10.0.0)",
+    "jupyter (>=1.1.1,<2.0.0)",
+    "pandas<3.0.0",
+    "pillow>=12.3.0",
+    "pyarrow>=25.0.0",
+    "pyspark>=4.2.0",
+    "tensorflow>=2.21.0",
+]
+
+[dependency-groups]
+
+[build-system]
+requires = ["uv_build>=0.11.7,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.uv]
+package = false
