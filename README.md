@@ -4,9 +4,38 @@ TP Traitement Big Data sur AWS EMR
 
 démarré le 13 juin 2026
 
+## Les données
+
+Le [jeu de données][1] constitué des images de fruits et des labels associés (en téléchargement direct à [ce lien][2], environ 1,4 Go).
+
+[1]: https://www.kaggle.com/moltean/fruits
+[2]: https://s3.eu-west-1.amazonaws.com/course.oc-static.com/projects/Data_Scientist_P8/fruits.zip
+
+Sauvegardez-le en local de sorte à obtenir l'arborescence suivante :
+
+```bash
+$ tree -L 2 data/
+data/
+├── fruits
+│   ├── fruits-360_dataset
+│   └── fruits-360-original-size
+├── Results
+└── Test1
+    ├── Apple Crimson Snow
+    ├── Apple Golden 1
+    └── Apple Golden 2
+```
+
+Copiez un petit échantillon de quelques classes (par exemple, trois) dans le répertoire `Test1`.
+
+## Le notebook
+
+Voir `P8_Notebook_Linux_EMR_PySpark_V1.0.ipynb`
+
 ## Installation
 
-Se positionner dans le répertoire du projet :
+0. Cloner ce repo.
+1. Se positionner dans le répertoire du projet :
 
 ```bash
 cd project/dir/
