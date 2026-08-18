@@ -30,7 +30,10 @@ Copiez un petit échantillon de quelques classes (par exemple, trois) dans le r�
 
 ## Le notebook
 
-Voir `P8_Notebook_Linux_EMR_PySpark_V1.0.ipynb`
+Le notebook fourni `P8_Notebook_Linux_EMR_PySpark_V1.0.ipynb` a été séparé en deux :
+
+- `P8_Notebook_Parts_1-3_Local.ipynb`
+- `P8_Notebook_Parts_4-5_EMR.ipynb`
 
 ## Installation
 
