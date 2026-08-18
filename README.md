@@ -65,3 +65,69 @@ export LD_LIBRARY_PATH="$(realpath $abs_path_to_my_venv/lib/python3.12/site-pack
 ```bash
 uv run python -m ipykernel install --user --name='oc-fruits' --display-name='Python 3.12 (oc-fruits)'
 ```
+
+## AWS CLI: Installation Instructions [(source)][3]
+
+[3]: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html#getting-started-install-instructions
+
+1. Select `Linux` > `Snap package`.
+
+2. Run `sudo snap install aws-cli --classic`
+
+3. Verify that the AWS CLI installed correctly by running `aws --version` which should return a string similar to
+
+   ```plaintext
+   aws-cli/2.35.21 Python/3.14.6 Linux/7.0.0-29-generic exe/x86_64.ubuntu.24
+   ```
+
+4. To update AWS CLI, run `sudo snap refresh aws-cli`
+
+## AWS CLI: Setting up [(source)][4]
+
+[4]: https://docs.aws.amazon.com/cli/latest/userguide/getting-started-quickstart.html
+
+1. Sign in to AWS in your browser with your root user.
+
+2. Run `aws login` (or `aws login --remote` [option][5] to provide a URL for you to open on a browser-enabled device in case the device using the AWS CLI does not have a browser)
+
+3. Set AWS Region by typing in `eu-west-3` (which is Paris).
+
+4. A new browser window or tab should open. Select your root user. (You can close that tab soon)
+
+5. AWS CLI should return a string similar to
+
+   ```plaintext
+   Updated profile default to use arn:aws:iam::719640534499:root credentials.
+   ```
+
+   Which you can check by several means, either with
+
+   ```bash
+   tree ~/.aws
+   .
+   ├── cli
+   │   └── cache
+   │       └── session.db
+   ├── config
+   └── login
+      └── cache
+         └── 501e180d8d16300799e53cdbb147ba7a8f8b0c5f129ace7485a80a529421c38e.json
+   ```
+
+   or with
+
+   ```bash
+   cat ~/.aws/config
+
+   [default]
+   login_session = arn:aws:iam::719640534499:root
+   region = eu-west-3
+   ```
+
+6. Complete `~/.aws/config` with a property `output = json` to the `[default]` section by running
+
+   ```bash
+   aws configure set output json
+   ```
+
+[5]: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sign-in.html
