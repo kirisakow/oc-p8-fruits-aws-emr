@@ -292,3 +292,34 @@ aws s3 cp    bootstrap-emr.sh  s3://kirisakow-oc-p8-fruits-aws-emr/
 aws s3 cp    data/Test1        s3://kirisakow-oc-p8-fruits-aws-emr/data/Test1 --recursive
 aws s3 sync  data/Test1        s3://kirisakow-oc-p8-fruits-aws-emr/data/Test1 --recursive
 ```
+
+## Data assessment & AWS EMR cluster sizing analysis
+
+### Data assessment
+
+| Relative path | N images | Size on disk |
+| - | - | - |
+| `data/Test1`                           | 472    | 3.6MB |
+| `data/fruits/fruits-360-original-size` | 12,455 | ~583MB |
+| `data/fruits/fruits-360_dataset`       | 90,483 | ~1.6GB |
+
+### Cluster sizing analysis
+
+Here are a few conservative options for AWS EMR cluster located in eu-west-3 region and purported for TensorFlow + PySpark image processing (MobileNetV2 feature extraction via pandas UDF):
+
+| Use Case                   | Master    | Core Nodes        | Estimated Cost     | Processing Time |
+| - | - | - | - | - |
+| Test1 (472 images)         | m5.xlarge | 1 × m5.xlarge     | ~$0.36/hour        | < 10 min    |
+| Medium scale (~10K images) | r5.xlarge | 2 × r5.xlarge     | ~$1.00/hour        | 20 – 30 min |
+| Full dataset (90K+ images) | r5.xlarge | 3 – 4 × r5.xlarge | ~$1.50 – 2.00/hour | 40 – 60 min |
+
+**Assumptions:** r5.xlarge (4 vCPU, 32GB RAM), spot pricing, MobileNetV2 needs ~1-2GB per executor for batch processing
+
+**Recommendation:** Start with 1 master (m5.xlarge) + 2 core nodes (r5.xlarge) for testing. Scale core nodes to 3 – 4 for full dataset.
+
+### Cost Control Tips
+
+- Use **spot instances** for non-critical workloads (add `Market=SPOT` to instance groups)
+- Always use **auto-terminate** for test clusters
+- Monitor costs via AWS Cost Explorer
+- For Test1, the cluster should complete in <30 minutes
