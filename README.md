@@ -323,3 +323,68 @@ Here are a few conservative options for AWS EMR cluster located in eu-west-3 reg
 - Always use **auto-terminate** for test clusters
 - Monitor costs via AWS Cost Explorer
 - For Test1, the cluster should complete in <30 minutes
+
+## Create transient EMR cluster for processing dummy script `test_pyspark.py`
+
+### 0. Upload `test_pyspark.py` in an S3 bucket
+
+```bash
+aws s3 cp test_pyspark.py s3://kirisakow-oc-p8-fruits-aws-emr/
+```
+
+### 1. Create EMR Cluster
+
+Here's recommended frugal EMR cluster configuration for processing `data/Test1` sample (472 images, 3 apple classes):
+
+- Master: 1 × r5.xlarge (4 vCPU, 32GB RAM)
+- Core: 1 × r5.xlarge (4 vCPU, 32GB RAM)
+- Region: eu-west-3 (Paris) for RGPD compliance
+- Estimated cost: ~$0.40-0.60/hour (spot pricing) or ~$1.00/hour (on-demand)
+
+This gives 8 vCPUs / 64GB total—more than sufficient for MobileNetV2 feature extraction on 472 images.
+
+```bash
+aws emr create-cluster \
+--name "OC-P8-Fruits-Test1" \
+--release-label emr-6.15.0 \
+--applications Name=Spark Name=Hadoop \
+--ec2-attributes KeyName=oc-p8-fruits-aws-ec2-key \
+--instance-groups \
+InstanceGroupType=MASTER,InstanceType=r5.xlarge,InstanceCount=1 \
+InstanceGroupType=CORE,InstanceType=r5.xlarge,InstanceCount=1 \
+--bootstrap-actions Path=s3://kirisakow-oc-p8-fruits-aws-emr/bootstrap-emr.sh,Name="Install Python packages" \
+--steps Type=Spark,Name="RunTestPySpark",ActionOnFailure=CONTINUE,Args=[s3://kirisakow-oc-p8-fruits-aws-emr/test_pyspark.py] \
+--log-uri s3://kirisakow-oc-p8-fruits-aws-emr/elasticmapreduce/logs/ \
+--region eu-west-3 \
+--auto-terminate \
+--use-default-roles
+```
+
+### 2. Monitor Cluster
+
+```bash
+# List clusters
+aws emr list-clusters --region eu-west-3
+
+# Get cluster details (returns a big JSON)
+aws emr describe-cluster --cluster-id j-XXXXXXXXXXXX --region eu-west-3
+
+# List steps
+aws emr list-steps --cluster-id j-XXXXXXXXXXXX --region eu-west-3
+
+# Get step details
+aws emr describe-step --cluster-id j-XXXXXXXXXXXX --step-id s-XXXXXXXXXXXXXXXXXXXX --region eu-west-3
+```
+
+### 3. Inspect logs
+
+You'll be given access to various gzipped logs (typically: `controller.gz`, `stderr.gz`, and `stdout.gz`) that you can read with the following command:
+
+```bash
+aws s3 cp s3://kirisakow-oc-p8-fruits-aws-emr/elasticmapreduce/logs/j-XXXXXXXXXXXX/steps/s-XXXXXXXXXXXXXXXXXXXX/stdout.gz - | gunzip
+
+aws s3 cp s3://kirisakow-oc-p8-fruits-aws-emr/elasticmapreduce/logs/j-XXXXXXXXXXXX/steps/s-XXXXXXXXXXXXXXXXXXXX/stderr.gz - | gunzip
+#         └───────────────────────────┬────────────────────────────┘                                                     └┬┘
+#                                     │                                                                                   │
+#                       --log-uri value                                                    copy to stdout instead of saving
+```
