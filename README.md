@@ -277,3 +277,18 @@ rm /path/to/KEY_PAIR_NAME.pem
      git secrets --add 'KEY_PAIR_NAME'
      git secrets --add '\.pem$'
      ```
+
+## Upload files in an S3 bucket
+
+```bash
+# 1. Create an S3 bucket with a unique name 'kirisakow-oc-p8-fruits-aws-emr'
+aws s3 mb s3://kirisakow-oc-p8-fruits-aws-emr --region eu-west-3
+
+# 2. Verify that the bucket has been successfully created
+aws s3 ls
+
+# 3. Various commands to upload contents of a local file or directory to the bucket
+aws s3 cp    bootstrap-emr.sh  s3://kirisakow-oc-p8-fruits-aws-emr/
+aws s3 cp    data/Test1        s3://kirisakow-oc-p8-fruits-aws-emr/data/Test1 --recursive
+aws s3 sync  data/Test1        s3://kirisakow-oc-p8-fruits-aws-emr/data/Test1 --recursive
+```
