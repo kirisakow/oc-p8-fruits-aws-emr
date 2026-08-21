@@ -155,3 +155,92 @@ aws emr create-default-roles --region eu-west-3
 # 3. Verify that both "EMR_DefaultRole" and "EMR_EC2_DefaultRole" roles have been created for the region
 aws iam list-roles --region eu-west-3 | jq '.Roles[].RoleName'
 ```
+
+## IAM User Management
+
+### 1. Create IAM User (Required)
+
+Create a dedicated IAM user for this project:
+
+```bash
+# Create IAM user
+aws iam create-user --user-name oc-p8-user --region eu-west-3
+
+# Verify user was created
+aws iam list-users --region eu-west-3
+```
+
+### 2. Ensure IAM User Permissions
+
+Your IAM user needs at minimum:
+
+- `AmazonElasticMapReduceFullAccess`
+- `AmazonS3FullAccess`
+- `IAMReadOnlyAccess`
+
+```bash
+# List user policies (should be empty initially)
+aws iam list-attached-user-policies --user-name oc-p8-user --region eu-west-3
+
+# Attach required policies
+aws iam attach-user-policy --user-name oc-p8-user --policy-arn arn:aws:iam::aws:policy/AmazonElasticMapReduceFullAccess --region eu-west-3
+aws iam attach-user-policy --user-name oc-p8-user --policy-arn arn:aws:iam::aws:policy/AmazonEC2FullAccess --region eu-west-3
+aws iam attach-user-policy --user-name oc-p8-user --policy-arn arn:aws:iam::aws:policy/AmazonS3FullAccess --region eu-west-3
+aws iam attach-user-policy --user-name oc-p8-user --policy-arn arn:aws:iam::aws:policy/IAMReadOnlyAccess --region eu-west-3
+
+# List user policies: You should see the three policies have been attached
+aws iam list-attached-user-policies --user-name oc-p8-user --region eu-west-3
+```
+
+## Log in as IAM User: AWS Credentials Setup
+
+**Note:** Requires `jq` binary. Install it with `sudo apt install jq`
+
+Run the below command which creates access key and saves the returned `AccessKeyId` and `SecretAccessKey` values (you'll need them for AWS CLI configuration):
+
+```bash
+# Create access keys for the user
+aws iam create-access-key --user-name oc-p8-user --region eu-west-3 | tee /tmp/oc-p8-keys.json
+
+# Configure Credentials
+aws configure set aws_access_key_id $(jq -r '.AccessKey.AccessKeyId' /tmp/oc-p8-keys.json)
+aws configure set aws_secret_access_key $(jq -r '.AccessKey.SecretAccessKey' /tmp/oc-p8-keys.json)
+
+# Verify the keys were saved correctly
+cat ~/.aws/credentials
+```
+
+**Optional:** A few other useful commands:
+
+```bash
+# List access keys
+aws iam list-access-keys --user-name oc-p8-user --region eu-west-3
+
+# Should you need to delete an access key, run
+aws iam delete-access-key --user-name oc-p8-user --access-key-id YOUR_OLD_KEY_ID --region eu-west-3
+
+# Should you need to delete ALL the access keys, run
+aws iam list-access-keys --user-name oc-p8-user --region eu-west-3 \
+| jq -r '.AccessKeyMetadata[].AccessKeyId' \
+| xargs -I {} aws iam delete-access-key --user-name oc-p8-user --access-key-id {} --region eu-west-3
+```
+
+### Log out of the root session and switch to IAM user
+
+```bash
+# Verify you're now using the IAM user
+aws sts get-caller-identity
+
+# If you're still logged in as root, log out of root session
+aws logout
+
+# Verify you're now using the IAM user
+aws sts get-caller-identity
+```
+
+### Log back in as root (optional)
+
+```bash
+# Should you need to log back in as root, run
+aws logout && rm -f ~/.aws/credentials && aws login
+```
