@@ -244,3 +244,36 @@ aws sts get-caller-identity
 # Should you need to log back in as root, run
 aws logout && rm -f ~/.aws/credentials && aws login
 ```
+
+## EC2 Key Pair Management
+
+```bash
+# Verify existing key pairs:
+aws ec2 describe-key-pairs --region eu-west-3
+
+# If none exist, create a new ed25519 key pair. The `--output text` options converts the `--query 'KeyMaterial'` JSON output (with quotes and escaped newlines) to plain text, raw private key material (with actual newlines, no quotes), which is required for a valid PEM file.
+aws ec2 create-key-pair --key-name oc-p8-fruits-aws-ec2-key --region eu-west-3 --key-type ed25519 --query 'KeyMaterial' --output text \
+| tee ~/.ssh/oc-p8-fruits-aws-ec2-key.pem
+
+# Set permissions as SSH requires private keys to strictly be read-only for owner
+chmod 400 ~/.ssh/oc-p8-fruits-aws-ec2-key.pem
+
+# Should you need to delete a key pair, run
+aws ec2 delete-key-pair --key-name KEY_PAIR_NAME --region eu-west-3
+rm /path/to/KEY_PAIR_NAME.pem
+```
+
+### Notes
+
+- `--key-name` option value will be used later in `aws emr create-cluster` command as `--ec2-attributes` option value.
+
+- Should you choose to store your private key file `KEY_PAIR_NAME.pem` inside your local git repository, there are several things you need to know:
+  1. Ensure private key is untracked by running `git status`. Otherwise you'll need to untrack it with `git rm --cached KEY_PAIR_NAME.pem`.
+  2. Update `.gitignore` with a `*.pem` entry.
+  3. Prevent accidental commits with git-secrets:
+
+     ```bash
+     git secrets --install
+     git secrets --add 'KEY_PAIR_NAME'
+     git secrets --add '\.pem$'
+     ```
