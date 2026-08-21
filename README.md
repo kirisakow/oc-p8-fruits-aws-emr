@@ -6,7 +6,7 @@ démarré le 13 juin 2026
 
 ## Les données
 
-Le [jeu de données][1] constitué des images de fruits et des labels associés (en téléchargement direct à [ce lien][2], environ 1,4 Go).
+Le [jeu de données][1] constitué des images de fruits et des labels associés (en téléchargement direct à [ce lien][2], environ 1,4 Go).
 
 [1]: https://www.kaggle.com/moltean/fruits
 [2]: https://s3.eu-west-1.amazonaws.com/course.oc-static.com/projects/Data_Scientist_P8/fruits.zip
@@ -17,8 +17,8 @@ Sauvegardez-le en local de sorte à obtenir l'arborescence suivante :
 $ tree -L 2 data/
 data/
 ├── fruits
-│   ├── fruits-360_dataset
-│   └── fruits-360-original-size
+│   ├── fruits-360_dataset
+│   └── fruits-360-original-size
 ├── Results
 └── Test1
     ├── Apple Crimson Snow
@@ -131,3 +131,27 @@ uv run python -m ipykernel install --user --name='oc-fruits' --display-name='Pyt
    ```
 
 [5]: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-sign-in.html
+
+## Create IAM Roles (One-Time)
+
+In order for EMR to function and be allowed to launch clusters and access your S3 bucket, two essential IAM roles need to be created **once for a given region**:
+
+- EMR service role (`EMR_DefaultRole`) which allows the EMR service to manage AWS resources (EC2 instances, security groups, etc.) on your behalf.
+
+- EC2 instance profile (`EMR_EC2_DefaultRole`) which grants your cluster's EC2 instances permission to access other AWS services (especially S3 for reading your data and writing results)
+
+To achieve that,
+
+```bash
+# 1. Verify you're logged in as root
+aws sts get-caller-identity
+
+# If not, Log out and log in as root
+aws logout && rm -f ~/.aws/credentials && aws login
+
+# 2. Create IAM default roles for the region
+aws emr create-default-roles --region eu-west-3
+
+# 3. Verify that both "EMR_DefaultRole" and "EMR_EC2_DefaultRole" roles have been created for the region
+aws iam list-roles --region eu-west-3 | jq '.Roles[].RoleName'
+```
