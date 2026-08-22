@@ -388,3 +388,150 @@ aws s3 cp s3://kirisakow-oc-p8-fruits-aws-emr/elasticmapreduce/logs/j-XXXXXXXXXX
 #                                     │                                                                                   │
 #                       --log-uri value                                                    copy to stdout instead of saving
 ```
+
+## Create a persistent EMR cluster for processing `data/Test1` sample in JupyterHub
+
+### 0. Upload files in an S3 bucket
+
+```bash
+# Upload JupyterHub S3 persistence configuration file
+aws s3 cp jupyter-s3-conf.json s3://kirisakow-oc-p8-fruits-aws-emr/
+
+# Upload data sample
+aws s3 cp data/Test1 s3://kirisakow-oc-p8-fruits-aws-emr/data/Test1 --recursive
+```
+
+### 1. Create EMR Cluster
+
+Here's recommended frugal EMR cluster configuration for processing `data/Test1` sample (472 images, 3 apple classes):
+
+- Master: 1 × r5.xlarge (4 vCPU, 32GB RAM)
+- Core: 2 × r5.xlarge (8 vCPU, 64GB RAM)
+- Region: eu-west-3 (Paris) for RGPD compliance
+- Estimated cost: ~$0.40-0.60/hour (spot pricing) or ~$1.00/hour (on-demand)
+
+This gives 12 vCPUs and 96GB RAM total — more than sufficient for MobileNetV2 feature extraction on 472 images.
+
+```bash
+aws emr create-cluster \
+--name "OC-P8-Fruits-Test1-Jupyter" \
+--release-label emr-6.15.0 \
+--applications Name=Spark Name=Hadoop Name=JupyterHub \
+--ec2-attributes KeyName=oc-p8-fruits-aws-ec2-key \
+--instance-groups \
+InstanceGroupType=MASTER,InstanceType=r5.xlarge,InstanceCount=1 \
+InstanceGroupType=CORE,InstanceType=r5.xlarge,InstanceCount=2 \
+--bootstrap-actions Path=s3://kirisakow-oc-p8-fruits-aws-emr/bootstrap-emr.sh,Name="Install Python packages" \
+--configurations file://jupyter-s3-conf.json \
+--log-uri s3://kirisakow-oc-p8-fruits-aws-emr/elasticmapreduce/logs/ \
+--region eu-west-3 \
+--no-auto-terminate \
+--use-default-roles
+```
+
+### 2. Monitor Cluster
+
+```bash
+# List clusters
+aws emr list-clusters --region eu-west-3
+
+# Get cluster details (returns a big JSON)
+aws emr describe-cluster --cluster-id j-3PAPRCOC9UISM --region eu-west-3
+
+# Check cluster status
+aws emr describe-cluster --cluster-id j-3PAPRCOC9UISM --region eu-west-3 --query "Cluster.Status.State"
+
+# Check cluster status continuously
+watch -n 30 "aws emr describe-cluster --cluster-id j-3PAPRCOC9UISM --region eu-west-3 --query 'Cluster.Status.State'"
+
+# List steps
+aws emr list-steps --cluster-id j-3PAPRCOC9UISM --region eu-west-3
+
+# Get step details
+aws emr describe-step --cluster-id j-3PAPRCOC9UISM --step-id s-XXXXXXXXXXXXXXXXXXXX --region eu-west-3
+```
+
+### 3. Set up the SSH tunnel to access JupyterHub
+
+**Prerequisites:** Wait till the cluster status state has switched to WAITING.
+
+#### 1. Configure the security group (One-Time per IP Address)
+
+```bash
+# Find the security group ID for the master node
+aws emr describe-cluster \
+--cluster-id j-3PAPRCOC9UISM \
+--query "Cluster.Ec2InstanceAttributes.EmrManagedMasterSecurityGroup" \
+--region eu-west-3
+
+# Get your public IPv4 address
+curl -4 ifconfig.me
+
+# Authorize SSH access for your IP address
+aws ec2 authorize-security-group-ingress \
+--group-id sg-0730998104e415519 \
+--protocol tcp \
+--port 22 \
+--cidr $(curl -4 ifconfig.me)/32 \
+--region eu-west-3
+```
+
+#### 2. FoxyProxy configuration (One-Time)
+
+1. Install FoxyProxy extension for Firefox/Chrome if not already installed
+
+2. Add new proxy:
+   - Name: AWS EMR Cluster (or anything)
+   - Proxy Type: SOCKS5
+   - Proxy Host: 127.0.0.1 (or localhost)
+   - Proxy Port: 5555
+
+3. Save.
+
+With the proxy active, all traffic routes through your SSH tunnel to the EMR master node, giving you access to JupyterHub and other web applications.
+
+#### 3. Get your master node's public DNS
+
+```bash
+# Get master node public DNS name (ec2-XXX-XXX-XXX-XXX.eu-west-3.compute.amazonaws.com)
+aws emr describe-cluster --cluster-id j-3PAPRCOC9UISM --region eu-west-3 --query "Cluster.MasterPublicDnsName" --output text
+
+# Create SSH tunnel
+ssh -i ~/.ssh/oc-p8-fruits-aws-ec2-key.pem -ND 5555 hadoop@ec2-XXX-XXX-XXX-XXX.eu-west-3.compute.amazonaws.com
+#                                                          └────────────────────────┬────────────────────────┘
+#                                                                                   │
+#                                                         master node public DNS name
+
+# Same command, as a oneliner:
+ssh -i ~/.ssh/oc-p8-fruits-aws-ec2-key.pem -ND 5555 hadoop@$(aws emr describe-cluster --cluster-id j-3PAPRCOC9UISM --region eu-west-3 --query "Cluster.MasterPublicDnsName" --output text)
+```
+
+- `-N` : Do not execute a remote command. This is useful for just forwarding ports.
+- `-D 5555` : Dynamic port forwarding. Creates SOCKS proxy on local port 5555.
+
+#### 4. Log in to JupyterHub
+
+- Find the URL in AWS EMR Web GUI. Should be `https://<master node public DNS>:9443` ie `https://ec2-XXX-XXX-XXX-XXX.eu-west-3.compute.amazonaws.com:9443`
+- Enable FoxyProxy for that tab.
+- Username: `jovyan`
+- Password: `jupyter`
+
+#### 5. Move or copy S3 `data/` directory into S3 `jupyter/jovyan/` directory
+
+```bash
+aws s3 cp s3://kirisakow-oc-p8-fruits-aws-emr/data/ \
+s3://kirisakow-oc-p8-fruits-aws-emr/jupyter/jovyan/data/ \
+--recursive
+```
+
+#### 6. Select PySpark as a kernel for your Jupyter notebook
+
+### 4. Terminate a cluster
+
+```bash
+aws emr terminate-clusters --cluster-ids j-3PAPRCOC9UISM --region eu-west-3
+```
+
+### 5. Inspect logs
+
+See above.
