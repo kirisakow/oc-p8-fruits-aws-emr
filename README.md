@@ -290,7 +290,8 @@ aws s3 ls
 # 3. Various commands to upload contents of a local file or directory to the bucket
 aws s3 cp    bootstrap-emr.sh  s3://kirisakow-oc-p8-fruits-aws-emr/
 aws s3 cp    data/Test1        s3://kirisakow-oc-p8-fruits-aws-emr/data/Test1 --recursive
-aws s3 sync  data/Test1        s3://kirisakow-oc-p8-fruits-aws-emr/data/Test1 --recursive
+# To resume an interrupted copying, use sync
+aws s3 sync  data/Test1        s3://kirisakow-oc-p8-fruits-aws-emr/data/Test1
 ```
 
 ## Data assessment & AWS EMR cluster sizing analysis
@@ -436,19 +437,19 @@ InstanceGroupType=CORE,InstanceType=r5.xlarge,InstanceCount=2 \
 aws emr list-clusters --region eu-west-3
 
 # Get cluster details (returns a big JSON)
-aws emr describe-cluster --cluster-id j-3PAPRCOC9UISM --region eu-west-3
+aws emr describe-cluster --cluster-id j-H8PK3O2MTK5W --region eu-west-3
 
 # Check cluster status
-aws emr describe-cluster --cluster-id j-3PAPRCOC9UISM --region eu-west-3 --query "Cluster.Status.State"
+aws emr describe-cluster --cluster-id j-H8PK3O2MTK5W --region eu-west-3 --query "Cluster.Status.State"
 
 # Check cluster status continuously
-watch -n 30 "aws emr describe-cluster --cluster-id j-3PAPRCOC9UISM --region eu-west-3 --query 'Cluster.Status.State'"
+watch -n 30 "aws emr describe-cluster --cluster-id j-H8PK3O2MTK5W --region eu-west-3 --query 'Cluster.Status.State'"
 
 # List steps
-aws emr list-steps --cluster-id j-3PAPRCOC9UISM --region eu-west-3
+aws emr list-steps --cluster-id j-H8PK3O2MTK5W --region eu-west-3
 
 # Get step details
-aws emr describe-step --cluster-id j-3PAPRCOC9UISM --step-id s-XXXXXXXXXXXXXXXXXXXX --region eu-west-3
+aws emr describe-step --cluster-id j-H8PK3O2MTK5W --step-id s-XXXXXXXXXXXXXXXXXXXX --region eu-west-3
 ```
 
 ### 3. Set up the SSH tunnel to access JupyterHub
@@ -460,7 +461,7 @@ aws emr describe-step --cluster-id j-3PAPRCOC9UISM --step-id s-XXXXXXXXXXXXXXXXX
 ```bash
 # Find the security group ID for the master node
 aws emr describe-cluster \
---cluster-id j-3PAPRCOC9UISM \
+--cluster-id j-H8PK3O2MTK5W \
 --query "Cluster.Ec2InstanceAttributes.EmrManagedMasterSecurityGroup" \
 --region eu-west-3
 
@@ -494,7 +495,7 @@ With the proxy active, all traffic routes through your SSH tunnel to the EMR mas
 
 ```bash
 # Get master node public DNS name (ec2-XXX-XXX-XXX-XXX.eu-west-3.compute.amazonaws.com)
-aws emr describe-cluster --cluster-id j-3PAPRCOC9UISM --region eu-west-3 --query "Cluster.MasterPublicDnsName" --output text
+aws emr describe-cluster --cluster-id j-H8PK3O2MTK5W --region eu-west-3 --query "Cluster.MasterPublicDnsName" --output text
 
 # Create SSH tunnel
 ssh -i ~/.ssh/oc-p8-fruits-aws-ec2-key.pem -ND 5555 hadoop@ec2-XXX-XXX-XXX-XXX.eu-west-3.compute.amazonaws.com
@@ -503,7 +504,7 @@ ssh -i ~/.ssh/oc-p8-fruits-aws-ec2-key.pem -ND 5555 hadoop@ec2-XXX-XXX-XXX-XXX.e
 #                                                         master node public DNS name
 
 # Same command, as a oneliner:
-ssh -i ~/.ssh/oc-p8-fruits-aws-ec2-key.pem -ND 5555 hadoop@$(aws emr describe-cluster --cluster-id j-3PAPRCOC9UISM --region eu-west-3 --query "Cluster.MasterPublicDnsName" --output text)
+ssh -i ~/.ssh/oc-p8-fruits-aws-ec2-key.pem -ND 5555 hadoop@$(aws emr describe-cluster --cluster-id j-H8PK3O2MTK5W --region eu-west-3 --query "Cluster.MasterPublicDnsName" --output text)
 ```
 
 - `-N` : Do not execute a remote command. This is useful for just forwarding ports.
@@ -529,9 +530,56 @@ s3://kirisakow-oc-p8-fruits-aws-emr/jupyter/jovyan/data/ \
 ### 4. Terminate a cluster
 
 ```bash
-aws emr terminate-clusters --cluster-ids j-3PAPRCOC9UISM --region eu-west-3
+aws emr terminate-clusters --cluster-ids j-H8PK3O2MTK5W --region eu-west-3
 ```
 
 ### 5. Inspect logs
 
 See above.
+
+## Create a persistent EMR cluster for processing the full dataset `data/fruits/fruits-360_dataset/fruits-360/Test` in JupyterHub
+
+### 0. Upload files in an S3 bucket
+
+```bash
+# Upload JupyterHub S3 persistence configuration file
+aws s3 cp jupyter-s3-conf.json s3://kirisakow-oc-p8-fruits-aws-emr/
+
+# Upload data sample
+aws s3 cp \
+data/fruits/fruits-360_dataset/fruits-360/Test \
+s3://kirisakow-oc-p8-fruits-aws-emr/jupyter/jovyan/data/Test --recursive
+
+# To resume an interrupted copying, use sync
+aws s3 sync \
+data/fruits/fruits-360_dataset/fruits-360/Test \
+s3://kirisakow-oc-p8-fruits-aws-emr/jupyter/jovyan/data/Test
+```
+
+### 1. Create EMR Cluster
+
+Here's recommended frugal EMR cluster configuration for processing `data/fruits/fruits-360_dataset/fruits-360/Test` sample (22.6k images, full dataset):
+
+- Master: 1 × r5.xlarge (4 vCPU, 32GB RAM)
+- Core: 3 × r5.xlarge (12 vCPU, 96GB RAM)
+- Region: eu-west-3 (Paris) for RGPD compliance
+- Estimated cost: ~$0.40-0.60/hour (spot pricing) or ~$1.00/hour (on-demand)
+
+This gives 16 vCPUs and 128GB RAM total — more than sufficient for MobileNetV2 feature extraction on 22.6k images.
+
+```bash
+aws emr create-cluster \
+--name "OC-P8-Fruits-Full-Jupyter" \
+--release-label emr-6.15.0 \
+--applications Name=Spark Name=Hadoop Name=JupyterHub \
+--ec2-attributes KeyName=oc-p8-fruits-aws-ec2-key \
+--instance-groups \
+InstanceGroupType=MASTER,InstanceType=r5.xlarge,InstanceCount=1 \
+InstanceGroupType=CORE,InstanceType=r5.xlarge,InstanceCount=3 \
+--bootstrap-actions Path=s3://kirisakow-oc-p8-fruits-aws-emr/bootstrap-emr.sh,Name="Install Python packages" \
+--configurations file://jupyter-s3-conf.json \
+--log-uri s3://kirisakow-oc-p8-fruits-aws-emr/elasticmapreduce/logs/ \
+--region eu-west-3 \
+--no-auto-terminate \
+--use-default-roles
+```
